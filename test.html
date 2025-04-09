@@ -1,149 +1,211 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>RPG Game Template</title>
+    <title>3D RPG Template</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
+        #inventory {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
             color: white;
-            font-family: Arial;
-            font-size: 14px;
+            border-radius: 5px;
+        }
+        .slot {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 1px solid white;
+            margin: 2px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-    <div id="info">Use WASD keys to move</div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-    <script>
-        // Scene setup
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+    <div id="inventory"></div>
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+        { OrbitControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls.js';
 
-        // Player character (capsule)
-        const capsuleGeometry = new THREE.CapsuleGeometry(0.5, 1, 8, 64);
-        const capsuleMaterial = new THREE.MeshStandardMaterial({
-            color: 0x00ff00,
-            metalness: 0,
-            roughness: 0.5
+        class Game {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.controls = null;
+                this.player = null;
+                this.inventory = new Inventory();
+                this.keys = {};
+
+                this.init();
+            }
+
+            init() {
+                // Renderer setup
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.body.appendChild(this.renderer.domElement);
+
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(5, 5, 5);
+                directionalLight.castShadow = true;
+                this.scene.add(directionalLight);
+
+                // Ground
+                const groundGeometry = new THREE.PlaneGeometry(50, 50);
+                const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x3c8f3c });
+                const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                this.scene.add(ground);
+
+                // Player
+                this.player = new Player(this.scene, this.camera);
+                this.scene.add(this.player.mesh);
+
+                // Trees
+                this.generateTrees(20);
+
+                // Camera setup
+                this.camera.position.copy(this.player.mesh.position);
+                this.camera.position.y += 2;
+                this.camera.position.z += 5;
+                this.camera.lookAt(this.player.mesh.position);
+
+                // Controls
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enabled = false; // Start with player-controlled camera
+
+                // Event listeners
+                window.addEventListener('resize', this.onWindowResize.bind(this));
+                document.addEventListener('keydown', (e) => this.keys[e.key] = true);
+                document.addEventListener('keyup', (e) => this.keys[e.key] = false);
+
+                this.animate();
+            }
+
+            generateTrees(count) {
+                const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.3, 2);
+                const leavesGeometry = new THREE.ConeGeometry(1.5, 3, 8);
+                const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x4a3228 });
+                const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x2d5a27 });
+
+                for (let i = 0; i < count; i++) {
+                    const tree = new THREE.Group();
+                    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                    const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                    
+                    trunk.position.y = 1;
+                    leaves.position.y = 3;
+                    
+                    trunk.castShadow = true;
+                    leaves.castShadow = true;
+                    
+                    tree.add(trunk);
+                    tree.add(leaves);
+                    
+                    tree.position.x = (Math.random() - 0.5) * 40;
+                    tree.position.z = (Math.random() - 0.5) * 40;
+                    tree.position.y = 0;
+                    
+                    this.scene.add(tree);
+                }
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+                this.player.update(this.keys);
+                this.checkInteractions();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            checkInteractions() {
+                if (this.keys['f']) {
+                    // Simple distance-based interaction check
+                    const interactDistance = 5;
+                    const nearestTree = this.findNearestTree();
+                    if (nearestTree && nearestTree.distance < interactDistance) {
+                        console.log('Interacting with tree!');
+                    }
+                }
+            }
+
+            findNearestTree() {
+                // Implementation for finding nearest interactable object
+                return null; // Add your implementation
+            }
+        }
+
+        class Player {
+            constructor(scene, camera) {
+                this.geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+                this.material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+                this.mesh = new THREE.Mesh(this.geometry, this.material);
+                this.mesh.castShadow = true;
+                this.velocity = new THREE.Vector3();
+                this.camera = camera;
+                this.cameraOffset = new THREE.Vector3(0, 3, 5);
+            }
+
+            update(keys) {
+                const speed = 0.1;
+                this.velocity.set(0, 0, 0);
+
+                if (keys['w']) this.velocity.z = -speed;
+                if (keys['s']) this.velocity.z = speed;
+                if (keys['a']) this.velocity.x = -speed;
+                if (keys['d']) this.velocity.x = speed;
+
+                this.mesh.position.add(this.velocity);
+                this.mesh.position.y = Math.max(this.mesh.position.y, 0.5);
+
+                // Update camera position
+                this.camera.position.copy(this.mesh.position)
+                    .add(this.cameraOffset);
+                this.camera.lookAt(this.mesh.position);
+            }
+        }
+
+        class Inventory {
+            constructor() {
+                this.items = [];
+                this.element = document.getElementById('inventory');
+                this.updateUI();
+            }
+
+            addItem(item) {
+                this.items.push(item);
+                this.updateUI();
+            }
+
+            updateUI() {
+                this.element.innerHTML = this.items
+                    .map(() => `<div class="slot"></div>`)
+                    .join('');
+            }
+        }
+
+        // Initialize game
+        const game = new Game();
+
+        // Debug controls
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'e') game.inventory.addItem('item');
         });
-        const player = new THREE.Mesh(capsuleGeometry, capsuleMaterial);
-        scene.add(player);
-
-        // Attach camera to player
-        camera.position.set(0, 1, 0);
-        camera.lookAt(0, 0, 0);
-        player.add(camera);
-
-        // Movement controls
-        const moveSpeed = 5;
-        let keys = {};
-
-        document.addEventListener('keydown', function(event) {
-            keys[event.key.toLowerCase()] = true;
-        });
-
-        document.addEventListener('keyup', function(event) {
-            keys[event.key.toLowerCase()] = false;
-        });
-
-        function handleKeys() {
-            if (keys['w']) { player.position.z -= moveSpeed * delta; }
-            if (keys['s']) { player.position.z += moveSpeed * delta; }
-            if (keys['a']) { player.position.x -= moveSpeed * delta; }
-            if (keys['d']) { player.position.x += moveSpeed * delta; }
-
-            // Also update camera position
-            camera.position.set(camera.position.x + (player.position.x - camera.position.x) * 0.95,
-                camera.position.y + (player.position.y - camera.position.y) * 0.95,
-                camera.position.z + (player.position.z - camera.position.z) * 0.95);
-        }
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(5, 5, 5);
-        scene.add(directionalLight);
-
-        // Ground plane
-        const planeGeometry = new THREE.PlaneGeometry(200, 200);
-        const planeMaterial = new THREE.MeshPhongMaterial({
-            color: 0x4CAF50,
-            side: THREE.DoubleSide
-        });
-        const ground = new THREE.Mesh(planeGeometry, planeMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        scene.add(ground);
-
-        // Trees in background
-        function createTree(x, z) {
-            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
-            const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
-            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-
-            const leavesGeometry = new THREE.ConeGeometry(2, 3, 8);
-            const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x228B22 });
-            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-            
-            const tree = new THREE.Group();
-            tree.add(trunk);
-            tree.add(leaves);
-            tree.position.set(x, 1, z);
-            return tree;
-        }
-
-        // Add some trees in the background
-        for (let i = 0; i < 5; i++) {
-            scene.add(createTree(
-                Math.random() * 100 - 50,
-                Math.random() * 100 - 50
-            ));
-        }
-
-        // Camera controls
-        const cameraControls = new THREE.PointerLockControls(camera, document.body);
-        document.body.appendChild(cameraControls.domElement);
-
-        // Animation loop
-        let lastTime = Date.now();
-        const delta = 1;
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            const currentTime = Date.now();
-            delta = (currentTime - lastTime) / 1000;
-            lastTime = currentTime;
-
-            handleKeys();
-            cameraControls.update(delta);
-            
-            renderer.render(scene, camera);
-        }
-
-        // Handle window resize
-        window.addEventListener('resize', onWindowResize, false);
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // Start the game
-        document.body.style.cursor = 'none';
-        cameraControls.lock();
-
-        animate();
     </script>
 </body>
 </html>
