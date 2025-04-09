@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RPG Game Template</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Use WASD keys to move</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Player character (capsule)
+        const capsuleGeometry = new THREE.CapsuleGeometry(0.5, 1, 8, 64);
+        const capsuleMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ff00,
+            metalness: 0,
+            roughness: 0.5
+        });
+        const player = new THREE.Mesh(capsuleGeometry, capsuleMaterial);
+        scene.add(player);
+
+        // Attach camera to player
+        camera.position.set(0, 1, 0);
+        camera.lookAt(0, 0, 0);
+        player.add(camera);
+
+        // Movement controls
+        const moveSpeed = 5;
+        let keys = {};
+
+        document.addEventListener('keydown', function(event) {
+            keys[event.key.toLowerCase()] = true;
+        });
+
+        document.addEventListener('keyup', function(event) {
+            keys[event.key.toLowerCase()] = false;
+        });
+
+        function handleKeys() {
+            if (keys['w']) { player.position.z -= moveSpeed * delta; }
+            if (keys['s']) { player.position.z += moveSpeed * delta; }
+            if (keys['a']) { player.position.x -= moveSpeed * delta; }
+            if (keys['d']) { player.position.x += moveSpeed * delta; }
+
+            // Also update camera position
+            camera.position.set(camera.position.x + (player.position.x - camera.position.x) * 0.95,
+                camera.position.y + (player.position.y - camera.position.y) * 0.95,
+                camera.position.z + (player.position.z - camera.position.z) * 0.95);
+        }
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // Ground plane
+        const planeGeometry = new THREE.PlaneGeometry(200, 200);
+        const planeMaterial = new THREE.MeshPhongMaterial({
+            color: 0x4CAF50,
+            side: THREE.DoubleSide
+        });
+        const ground = new THREE.Mesh(planeGeometry, planeMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // Trees in background
+        function createTree(x, z) {
+            const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+            const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+
+            const leavesGeometry = new THREE.ConeGeometry(2, 3, 8);
+            const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x228B22 });
+            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            
+            const tree = new THREE.Group();
+            tree.add(trunk);
+            tree.add(leaves);
+            tree.position.set(x, 1, z);
+            return tree;
+        }
+
+        // Add some trees in the background
+        for (let i = 0; i < 5; i++) {
+            scene.add(createTree(
+                Math.random() * 100 - 50,
+                Math.random() * 100 - 50
+            ));
+        }
+
+        // Camera controls
+        const cameraControls = new THREE.PointerLockControls(camera, document.body);
+        document.body.appendChild(cameraControls.domElement);
+
+        // Animation loop
+        let lastTime = Date.now();
+        const delta = 1;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const currentTime = Date.now();
+            delta = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            handleKeys();
+            cameraControls.update(delta);
+            
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', onWindowResize, false);
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Start the game
+        document.body.style.cursor = 'none';
+        cameraControls.lock();
+
+        animate();
+    </script>
+</body>
+</html>
